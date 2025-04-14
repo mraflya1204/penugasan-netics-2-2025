@@ -1,0 +1,22 @@
+<!-- File Permission is Changed -->
+<group name="syscheck">
+  <rule id="100001" level="5">
+    <if_sid>550</if_sid>
+    <field name="changed_fields">permission</field>
+    <description>File permission was changed.</description>
+    <mitre>
+      <id>T1222.002</id>
+    </mitre>
+  </rule>
+</group>
+
+
+<!-- SSH Brute Force Attack is Attempted -->
+<group name="ossec,syslog,sshd,">
+ <rule id="100002" level="5">
+   <if_sid>5716,5758,5760,5762,2502</if_sid>
+   <match>^Failed|^error: PAM: Authentication|^error: maximum authentication attempts exceeded|Failed password|Failed keyboard|authentication error|Connection reset|more authentication failures;|REPEATED login failures</match>
+   <description>SSH Brute Force attack is attempted </description>
+   <group>authentication_failed,gdpr_IV_35.7.d,gdpr_IV_32.2,gpg13_7.1,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,pci_dss_10.2.4,pci_dss_10.2.5,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+</group>
