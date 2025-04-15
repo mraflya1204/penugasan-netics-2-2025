@@ -342,3 +342,254 @@ Modifikasi terhadap systemd timer atau service bisa menjadi tanda bahwa attacker
 
 ![](media/Custom11TriggerManager.png)
 
+### Rule 12 - 17 Prequisites
+Pertama, install Docker pada Wazuh Agent
+
+![](media/DockerInstall.png)
+
+Kemudian aktifkan remote command agar Agent bisa mendapatkan perintah dari Server menggunakan `echo "logcollector.remote_commands=1" >> /var/ossec/etc/local_internal_options.conf`
+
+Kemudian restart Wazuh Agent
+
+Pada Wazuh Manager, buat Wazuh Agent Group bernama `container` dengan menggunakan perintah `/var/ossec/bin/agent_groups -a -g container -q`
+
+Kemudian, assign Agent yang akan menjadi host dari Docker Container dengan menggunakan `/var/ossec/bin/agent_groups -a -i 001 -g container -q`
+
+Pada `/var/ossec/etc/shared/container/agent.conf`, tambahkan line berikut:
+```XML
+<agent_config>
+  <!-- Configuration to enable Docker listener module. -->
+  <wodle name="docker-listener">
+    <interval>10m</interval>
+    <attempts>5</attempts>
+    <run_on_start>yes</run_on_start>
+    <disabled>no</disabled>
+  </wodle>  
+
+  <!-- Command to extract container resources information. -->
+  <localfile>
+    <log_format>command</log_format>
+    <command>docker stats --format "{{.Container}} {{.Name}} {{.CPUPerc}} {{.MemUsage}} {{.MemPerc}} {{.NetIO}}" --no-stream</command>
+    <alias>docker container stats</alias>
+    <frequency>120</frequency>
+    <out_format>$(timestamp) $(hostname) docker-container-resource: $(log)</out_format>
+  </localfile>
+
+  <!-- Command to extract container health information. -->
+  <localfile>
+    <log_format>command</log_format>
+    <command>docker ps --format "{{.Image}} {{.Names}} {{.Status}}"</command>
+    <alias>docker container ps</alias>
+    <frequency>120</frequency>
+    <out_format>$(timestamp) $(hostname) docker-container-health: $(log)</out_format>
+  </localfile>
+</agent_config>
+```
+Line-line tersebut akan menjalankan Docker Listener Module dan melakukan command pada Endpoint Agent sebagai information gathering.
+
+Buat decoder file bernama `docker_decoders.xml` dalam `/var/ossec/etc/decoders/`, lalu isi dengan:
+```xml
+<!-- Decoder for container resources information. -->
+<decoder name="docker-container-resource">
+  <program_name>^docker-container-resource</program_name>
+</decoder>
+
+<decoder name="docker-container-resource-child">
+  <parent>docker-container-resource</parent>
+  <prematch>ossec: output: 'docker container stats':</prematch>
+  <regex>(\S+) (\S+) (\S+) (\S+) / (\S+) (\S+) (\S+) / (\S+)</regex>
+  <order>container_id, container_name, container_cpu_usage, container_memory_usage, container_memory_limit, container_memory_perc, container_network_rx, container_network_tx</order>
+</decoder>
+
+<!-- Decoder for container health information. -->
+<decoder name="docker-container-health">
+  <program_name>^docker-container-health</program_name>
+</decoder>
+
+<decoder name="docker-container-health-child">
+  <parent>docker-container-health</parent>
+  <prematch>ossec: output: 'docker container ps':</prematch>
+  <regex offset="after_prematch" type="pcre2">(\S+) (\S+) (.*?) \((.*?)\)</regex>
+  <order>container_image, container_name, container_uptime, container_health_status</order>
+</decoder>
+```
+
+Pada Wazuh Agent, buat sebuah environment bagi container menggunakan `mkdir container_env && cd $_`
+
+Kemudian, buat `docker_compose.yml` file yang akan melakukan actions otomatis guna testing.
+```yml
+version: '3.8'
+
+services:
+  db:
+    image: postgres
+    container_name: postgres-container
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 20s
+      timeout: 5s
+      retries: 1
+    ports:
+      - '8001:5432'
+    dns:
+      - 8.8.8.8
+      - 9.9.9.9
+    volumes:
+      - db:/var/lib/postgresql/data
+    networks:
+      - network
+    mem_limit: "512M"
+
+  cache:
+    image: redis
+    container_name: redis-container
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 20s
+      timeout: 5s
+      retries: 1
+    ports:
+      - '8002:6379'
+    dns:
+      - 8.8.8.8
+      - 9.9.9.9
+    volumes:
+      - cache:/data
+    networks:
+      - network
+    mem_limit: "512M"
+
+  nginx:
+    image: nginx
+    container_name: nginx-container
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "stat /etc/nginx/nginx.conf || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 1
+    ports:
+      - '8003:80'
+      - '4443:443'
+    dns:
+      - 8.8.8.8
+      - 9.9.9.9
+    networks:
+      - network
+    mem_limit: "512M"
+
+volumes:
+  db: {}
+  cache: {}
+networks:
+  network:
+```
+Docker Compose di atas akan melakukan pull image Nginx, Redis, dan Postgres dari Docker Hub, yang kemudian akan masing masing dijalnkan. Kemudian, environment akan membuat dan konek ke jaringan `container_env_network`. Setelah itu volume `container_env_db` dan `container_env_cache` akan dimount.
+
+![](media/DockerRunning.png)
+
+Ketika akan melakukan testing, jalankan command `docker exec -it nginx-container /bin/bash` untuk masuk ke shell dari container yang sedang berjalan. Kemudian jalankan command `apt update && apt install stress-ng -y` untuk melakukan install stress test pada container
+
+![](media/StressInstall.png)
+
+
+### Rule 12 (Container Resource Information)
+```XML
+  <!-- Rule for container resources information. -->
+  <rule id="100100" level="5">
+    <decoded_as>docker-container-resource</decoded_as>
+    <description>Docker: Container $(container_name) Resources</description>
+    <group>container_resource,</group>
+  </rule>
+```
+
+Untuk trigger event ini, cukup masuk kedalam salah satu container dan trigger sebuah command.
+
+![](media/Custom12TriggerAgent.png)
+
+![](media/Custom12TriggerManager.png)
+
+### Rule 13 (Container Memory and CPU Usage Warning)
+```XML
+  <rule id="100101" level="12">
+    <if_sid>100100</if_sid>
+    <field name="container_cpu_usage" type="pcre2">^(0*[8-9]\d|0*[1-9]\d{2,})</field>
+    <field name="container_memory_perc" type="pcre2">^(0*[8-9]\d|0*[1-9]\d{2,})</field>
+    <description>Docker: Container $(container_name) CPU usage ($(container_cpu_usage)) and memory usage ($(container_memory_perc)) is over 80%</description>
+    <group>container_resource,</group>
+  </rule>
+```
+
+Untuk trigger event ini, jalankan command `stress-ng -c 1 -l 80 -vm 1 --vm-bytes 500m -t 3m` untuk melakukan stress terhadap cpu dan memory dari container.
+
+![](media/Custom13TriggerAgent.png)
+
+![](media/Custom13TriggerManager.png)
+
+### Rule 14 (Container CPU Usage Warning)
+```XML
+  <rule id="100102" level="12">
+    <if_sid>100100</if_sid>
+    <field name="container_cpu_usage" type="pcre2">^(0*[8-9]\d|0*[1-9]\d{2,})</field>
+    <description>Docker: Container $(container_name) CPU usage ($(container_cpu_usage)) is over 80%</description>
+    <group>container_resource,</group>
+  </rule>  
+```
+
+Untuk trigger event ini, jalankan command `stress-ng -c 1 -l 80 -t 3m` untuk melakukan stress terhadap cpu dari container.
+
+![](media/Custom14TriggerAgent.png)
+
+![](media/Custom14TriggerManager.png)
+
+### Rule 15 (Container GPU Usage Warning)
+```XML
+  <!-- Rule to trigger when container memory usage is above 80%. -->
+  <rule id="100103" level="12">
+    <if_sid>100100</if_sid>
+    <field name="container_memory_perc" type="pcre2">^(0*[8-9]\d|0*[1-9]\d{2,})</field>
+    <description>Docker: Container $(container_name) memory usage ($(container_memory_perc)) is over 80%</description>
+    <group>container_resource,</group>
+  </rule>
+```
+
+Untuk trigger event ini, jalankan command `stress-ng -vm 1 --vm-bytes 500m -t 3m` untuk melakukan stress terhadap gpu dari container.
+
+![](media/Custom15TriggerAgent.png)
+
+![](media/Custom15TriggerManager.png)
+
+## Rule 16 (Container Health Information)
+```XML
+  <rule id="100104" level="5">
+    <decoded_as>docker-container-health</decoded_as>
+    <description>Docker: Container $(container_name) is $(container_health_status)</description>
+    <group>container_health,</group>
+  </rule>
+```
+
+Event ini akan trigger secara otomatis setiap 20s untuk cek health dari tiap container.
+
+![](media/Custom16TriggerManager.png)
+
+## Rule 17 (Unhealthy Container)
+```XML
+  <rule id="100105" level="12">
+    <if_sid>100104</if_sid>
+    <field name="container_health_status">^unhealthy$</field>
+    <description>Docker: Container $(container_name) is $(container_health_status)</description>
+    <group>container_health,</group>
+  </rule>
+```
+Event ini akan trigger ketika container termasuk `unhealthy` atau ketika file `/etc/nginx/nginx.conf` tidak ada.
+
+Untuk trip secara artifisial, cukup hapus file `/etc/nginx/nginx.conf`.
+
+![](media/Custom17TriggerAgent.png)
+
+![](media/Custom17TriggerManager.png)
