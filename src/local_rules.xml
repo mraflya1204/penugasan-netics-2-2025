@@ -20,3 +20,81 @@
    <group>authentication_failed,gdpr_IV_35.7.d,gdpr_IV_32.2,gpg13_7.1,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,pci_dss_10.2.4,pci_dss_10.2.5,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 </group>
+
+<!-- Shell Script File Permission Modified -->
+<group name="syscheck">
+  <rule id="100003" level="8">
+    <if_sid>550</if_sid>
+    <field name="file">.sh$</field>
+    <field name="changed_fields">^permission$</field>
+    <description>Permission change detected on shell script.</description>
+    <mitre>
+      <id>T1222.002</id>
+    </mitre>
+  </rule>
+ </group>
+
+<!-- SSH authorized_keys has been added-->
+<group name="common_persistence_techniques,sshd,">
+  <rule id="100004" level="10">
+    <if_sid>554</if_sid>
+    <field name="file" type="pcre2">\/authorized_keys$</field>
+    <description>SSH authorized_keys file "$(file)" has been added</description>
+    <mitre>
+      <id>T1098.004</id>
+    </mitre>
+  </rule>
+
+<!-- SSH authorized_keys has been modified-->
+  <rule id="100005" level="10">
+    <if_sid>550</if_sid>
+    <field name="file" type="pcre2">\/authorized_keys$</field>
+    <description>SSH authorized_keys file "$(file)" has been modified</description>
+    <mitre>
+      <id>T1098.004</id>
+    </mitre>
+  </rule>
+
+<!-- SSH configuration has been added-->
+  <rule id="100006" level="10">
+    <if_sid>550</if_sid>
+    <field name="file" type="pcre2">\/sshd_config$</field>
+    <description>SSH config file "$(file)" has been modified</description>
+    <mitre>
+      <id>T1098.004</id>
+    </mitre>
+  </rule>
+</group>
+
+<!-- Local Account Might be Modified -->
+<group name="common_persistence_techniques,">
+  <rule id="100007" level="10">
+    <if_sid>550</if_sid>
+    <field name="file" type="pcre2">\/etc\/passwd$|\/etc\/shadow$|\/etc\/gshadow$|\/etc\/group$|\/etc\/login.defs$</field>
+    <description>[File "$(file)" has been modified]: Possible local account manipulation</description>
+    <mitre>
+      <id>T1136.001</id>
+      <id>T1078.003</id>
+    </mitre>
+  </rule>
+
+<!-- A Shell Config is Added -->
+  <rule id="100008" level="10">
+    <if_sid>554</if_sid>
+    <field name="file" type="pcre2">\/etc\/profile$|\/etc/profile.d\/|\/etc\/bash.bashrc$|\/etc\/bash.bash_logout$|.bash_profile$|.bash_login$|.profile$|.bash_profile$|.bashrc$|.bash_logout$</field>
+    <description>Unix shell config "$(file)" has been added</description>
+    <mitre>
+      <id>T1546.004</id>
+    </mitre>
+  </rule>
+
+<!-- A Shell Config is Modified -->
+  <rule id="100009" level="10">
+    <if_sid>550</if_sid>
+    <field name="file" type="pcre2">\/etc\/profile$|\/etc/profile.d\/|\/etc\/bash.bashrc$|\/etc\/bash.bash_logout$|.bash_profile$|.bash_login$|.profile$|.bash_profile$|.bashrc$|.bash_logout$</field>
+    <description>Unix shell config "$(file)" has been modified</description>
+    <mitre>
+      <id>T1546.004</id>
+    </mitre>
+  </rule>
+</group>
