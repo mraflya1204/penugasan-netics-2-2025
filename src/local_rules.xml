@@ -97,4 +97,24 @@
       <id>T1546.004</id>
     </mitre>
   </rule>
+
+<!-- System Scheduling is Added -->
+  <rule id="100010" level="12">
+    <if_sid>554</if_sid>
+    <field name="file" type="pcre2">\/systemd\/system\/.*\.timer$|\/systemd\/system\/.*\.service$</field>
+    <description>[Systemd "$(file)" has been added]: Possible task/job scheduling</description>
+    <mitre>
+      <id>T1053.006</id>
+    </mitre>
+  </rule>
+  
+<!-- System Scheduling is Modified -->
+  <rule id="100011" level="12">
+    <if_sid>550</if_sid>
+    <field name="file" type="pcre2">\/systemd\/system\/.*\.timer$|\/systemd\/system\/.*\.service$</field>
+    <description>[Systemd "$(file)" has been modified]: Possible task/job scheduling</description>
+    <mitre>
+      <id>T1053.006</id>
+    </mitre>
+  </rule>
 </group>

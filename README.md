@@ -63,6 +63,8 @@ Hal ini dilakukan agar Wazuh Agent dapat mendeteksi kejadian yang ada pada folde
 
 Rule ini akan trigger event level 8 ketika sebuah file berubah permission.
 
+Perubahan permission file dapat menjadi indikator adanya upaya eskalasi privilege atau penyamaran file berbahaya. Dengan memonitor perubahan ini, sistem dapat lebih cepat mendeteksi aktivitas mencurigakan yang memodifikasi hak akses file penting.
+
 ![](media/Custom1TriggerAgent.png)
 
 ![](media/Custom1TriggerManager.png)
@@ -80,6 +82,8 @@ Rule ini akan trigger event level 8 ketika sebuah file berubah permission.
 ```
 
 Rule ini akan trigger event level 5 ketika sebuah brute force attempt terhadap ssh terjadi.
+
+Brute force adalah teknik umum untuk mencoba masuk ke sistem secara tidak sah. Rule ini bertujuan mendeteksi dan memberikan peringatan dini terhadap upaya login berulang yang gagal melalui SSH, yang bisa menjadi tanda serangan.
 
 ![](media/Custom2TriggerAgent.png)
 
@@ -101,6 +105,8 @@ Rule ini akan trigger event level 5 ketika sebuah brute force attempt terhadap s
 ```
 
 Rule ini akan trigger event level 8 ketika sebuah file berekstensi `.sh` (shell script) diubah permission nya.
+
+Perubahan permission pada shell script bisa menjadikan script yang sebelumnya tidak bisa dieksekusi menjadi executable, yang dapat digunakan untuk menjalankan perintah berbahaya secara otomatis. Ini penting untuk mendeteksi persistence attack.
 
 ![](media/Custom3TriggerAgent.png)
 
@@ -138,6 +144,8 @@ Hal ini dilakukan agar Wazuh Agent dapat memonitor file file yang berada pada se
 
 Rule ini akan trigger event level 10 ketika sebuah authorized_keys ditambahkan pada ssh Wazuh Agent.
 
+Penambahan file `authorized_keys` secara diam-diam bisa menjadi metode attacker untuk mendapatkan akses persistensi ke mesin target tanpa melalui proses otentikasi normal.
+
 ![](media/Custom4TriggerAgent.png)
 
 ![](media/Custom4TriggerManager.png)
@@ -155,6 +163,8 @@ Rule ini akan trigger event level 10 ketika sebuah authorized_keys ditambahkan p
 ```
 
 Rule ini akan trigger event level 10 ketika sebuah authorized_keys yang sudah ada dimodifikasi dalam bentuk apapun pada Wazuh Agent.
+
+Modifikasi pada `authorized_keys` dapat berarti penggantian atau penambahan kunci oleh pihak tidak sah. Ini dapat membuka pintu bagi akses backdoor tanpa sepengetahuan admin.
 
 ![](media/Custom5TriggerAgent.png)
 
@@ -174,6 +184,8 @@ Rule ini akan trigger event level 10 ketika sebuah authorized_keys yang sudah ad
 
 Rule ini akan trigger event level 10 ketika config dari SSHD telah dimofikasi
 
+File konfigurasi SSH mengatur bagaimana koneksi dilakukan. Modifikasi bisa berarti membuka port baru, mengaktifkan login root, atau hal berbahaya lainnya yang berhubungan dengan remote access.
+
 ![](media/Custom6TriggerAgent.png)
 
 ![](media/Custom6TriggerManager.png)
@@ -192,7 +204,7 @@ Untuk rule 7, konfigurasi file `/var/ossec/etc/ossec.conf` dan tambahkan:
 </ossec_config>
 ```
 
-### Rule 7
+### Rule 7 (A Local Account has been Modified)
 ```XML
 <group name="common_persistence_techniques,">
   <rule id="100007" level="10">
@@ -206,7 +218,9 @@ Untuk rule 7, konfigurasi file `/var/ossec/etc/ossec.conf` dan tambahkan:
   </rule>
 </group>
 ```
-Rule ini akan trigger event level 10 ketika beberapa folder, mainly `/etc/shadow`, `/etc/gshadow`, `/etc/passwrd`, `/etc/group`, `/etc/login.defs` telah dimodifikasi. Ketika folder-folder tersebut dimodifikasi, maka terdapat indikasi bahwa ada sebuah local account pada mesin yang telah tercompromised.
+Rule ini akan trigger event level 10 ketika beberapa folder, mainly `/etc/shadow`, `/etc/gshadow`, `/etc/passwrd`, `/etc/group`, `/etc/login.defs` telah dimodifikasi. 
+
+File seperti `/etc/passwd` dan `/etc/shadow` menyimpan informasi penting terkait user. Modifikasi bisa menjadi tanda pembuatan, perubahan, atau eskalasi akun oleh attacker.
 
 ![](media/Custom7TriggerAgent.png)
 
@@ -234,7 +248,7 @@ Untuk rule 8 - 9, konfigurasi file `/var/ossec/etc/ossec.conf` dan tambahkan:
 </ossec_config>
 ```
 
-### Rule 8
+### Rule 8 (A Shell Config is Added)
 ```XML
 <group name="common_persistence_techniques,">
   <rule id="100008" level="10">
@@ -249,12 +263,14 @@ Untuk rule 8 - 9, konfigurasi file `/var/ossec/etc/ossec.conf` dan tambahkan:
 
 Rule ini akan trigger ketika sebuah shell autorun config seperti `.bash` atau `.sh` di beberapa folder seperti `/etc/bash.bashrc` telah dibuat.
 
+Shell config baru bisa digunakan untuk menanam perintah yang akan dijalankan saat user login. Ini adalah salah satu metode persistence yang sering digunakan attacker.
+
 ![](media/Custom8TriggerAgent.png)
 
 ![](media/Custom8TriggerManager.png)
 
 
-### Rule 9
+### Rule 9 (A Shell Config is Modified)
 ```XML
   <rule id="100009" level="10">
     <if_sid>550</if_sid>
@@ -268,6 +284,61 @@ Rule ini akan trigger ketika sebuah shell autorun config seperti `.bash` atau `.
 
 Rule ini akan trigger ketika sebuah shell autorun config seperti `.bash` atau `.sh` di beberapa folder seperti `/etc/bash.bashrc` telah dimodifikasi.
 
+Perubahan konfigurasi shell bisa berarti penambahan perintah yang dijalankan otomatis saat shell dibuka. Hal ini sering dilakukan oleh malware untuk persistensi.
+
 ![](media/Custom9TriggerAgent.png)
 
 ![](media/Custom9TriggerManager.png)
+
+### Rule 10-11 Prequisites
+Untuk rule 10 - 11, konfigurasi file `/var/ossec/etc/ossec.conf` dan tambahkan:
+```XML
+<ossec_config>
+  <syscheck>
+    <directories check_all="yes" realtime="yes">/etc/systemd/system/</directories>
+    <directories check_all="yes" realtime="yes">/usr/lib/systemd/system/</directories>
+    <directories check_all="yes" realtime="yes">/usr/local/lib/systemd/system/</directories>
+    <directories check_all="yes" realtime="yes">/lib/systemd/system/</directories>
+  </syscheck>
+</ossec_config>
+```
+
+### Rule 10 (System Scheduling is Added)
+```XML
+  <rule id="100010" level="12">
+    <if_sid>554</if_sid>
+    <field name="file" type="pcre2">\/systemd\/system\/.*\.timer$|\/systemd\/system\/.*\.service$</field>
+    <description>[Systemd "$(file)" has been added]: Possible task/job scheduling</description>
+    <mitre>
+      <id>T1053.006</id>
+    </mitre>
+  </rule>
+```
+Rule ini akan trigger ketika sebuah Scheduled Task ditambahkan melalui systemd timer. File-file yang dimodifikasi biasanya terdapat pada `/etc/systemd/system/`, `/usr/lib/systemd/system/`, `/usr/local/lib/systemd/system/`, dan `/lib/systemd/system/`.
+
+Menambahkan service atau timer baru melalui systemd dapat menjadi cara attacker menjadwalkan script berbahaya agar dijalankan otomatis (persistence mechanism).
+
+![](media/Custom10TriggerAgent.png)
+
+![](media/Custom10TriggerManager.png)
+
+### Rule 11 (System Scheduling is Modified)
+```XML
+  <rule id="100011" level="12">
+    <if_sid>550</if_sid>
+    <field name="file" type="pcre2">\/systemd\/system\/.*\.timer$|\/systemd\/system\/.*\.service$</field>
+    <description>[Systemd "$(file)" has been modified]: Possible task/job scheduling</description>
+    <mitre>
+      <id>T1053.006</id>
+    </mitre>
+  </rule>
+```
+
+Rule ini akan trigger ketika sebuah Scheduled Task dimodifikasi melalui systemd timer. File-file yang dimodifikasi biasanya terdapat pada `/etc/systemd/system/`, `/usr/lib/systemd/system/`, `/usr/local/lib/systemd/system/`, dan `/lib/systemd/system/`.
+
+Modifikasi terhadap systemd timer atau service bisa menjadi tanda bahwa attacker mengubah waktu eksekusi tugas berbahaya, atau mengganti executable-nya.
+
+![](media/Custom11TriggerAgent.png)
+
+![](media/Custom11TriggerManager.png)
+
